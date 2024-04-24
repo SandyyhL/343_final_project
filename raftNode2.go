@@ -66,6 +66,36 @@ type LogEntry struct {
 	Term  int
 }
 
+type ProfileEntry struct {
+	Acronym string
+	Bio string
+	DisplayName string
+	Email string
+	Friends []string
+	ID int
+	Name string
+	Photo string
+	Status string
+	Username string
+}
+
+type MessageEntry struct {
+	ID int
+	Timestamp string
+	User string
+	Text string
+}
+
+type PostEntry struct {
+	Date string
+	Location string
+	Rating int
+	Text_description string
+	Timestamp string
+	Title string
+	User string
+}
+
 const (
 	// ElectionTimeoutMin = 300
 	// ElectionTimeoutMax = 600
@@ -306,6 +336,7 @@ func (raftNode *RaftNode) appendEntriesToFollowers(newEntry bool) {
 
 				} else {
 					raftNode.nextIndex[index]--
+					// retry with updated nextIndex
 				}
 			}
 			if reply.Term > raftNode.currentTerm {

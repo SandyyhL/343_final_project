@@ -36,13 +36,12 @@ type VoteReply struct {
 type AppendEntryArgument struct {
 	Term     int
 	LeaderID int
-
 	PrevLogIndex int
 	PrevLogTerm  int
 	Entry        []LogEntry
 	ProfileEntries []ProfileEntry
-	MessageEntries []
-	PostEntries    []
+	MessageEntries []MessageEntry
+	PostEntries    []PostEntry
 	LeaderCommit int
 }
 
