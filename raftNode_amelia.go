@@ -369,6 +369,9 @@ func startElectionTimer() {
 	}()
 }
 
+
+
+
 // This function is designed to emulate a client reaching out to the server.
 // Note that many of the realistic details are removed, for simplicity
 func ClientAddToLog() {

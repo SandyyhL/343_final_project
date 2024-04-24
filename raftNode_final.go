@@ -28,6 +28,7 @@ type RaftNode struct {
 	log        []LogEntry
 	matchIndex []int
 	nextIndex  []int
+	currentLeader int
 }
 
 type VoteArguments struct {
@@ -51,6 +52,10 @@ type AppendEntryArgument struct {
 	LeaderCommit int
 }
 
+type AppendEntryLeaderReply struct {
+	Success bool
+}
+
 type AppendEntryReply struct {
 	Term    int
 	Success bool
@@ -65,33 +70,32 @@ type ServerConnection struct {
 type LogEntry struct {
 	Index int
 	Term  int
+	CommandEntries []CommandEntry
 }
 
-type ProfileEntry struct {
-	Acronym string
-	Bio string
-	DisplayName string
-	Email string
-	Friends []string
-	ID int
-	Name string
-	Photo string
-	Status string
-	Username string
-}
-
-type AppendProfileArgument struct {
-	ProfileEntries []ProfileEntry
-	Term         int
-	LeaderID     int
-	PrevLogIndex int
-	PrevLogTerm  int
-	LeaderCommit int
-}
-
-type AppendProfileReply struct {
-	Term int
-	Success bool
+type CommandEntry struct {
+	LogType string
+	Profile_Acronym string
+	Profile_Bio string
+	Profile_DisplayName string
+	Profile_Email string
+	Profile_Friends []string
+	Profile_ID int
+	Profile_Name string
+	Profile_Photo string
+	Profile_Status string
+	Profile_Username string
+	Message_ID int
+	Message_Timestamp string
+	Message_User string
+	Message_Text string
+	Post_Date string
+	Post_Location string
+	Post_Rating int
+	Post_Description string
+	Post_Timestamp string
+	Post_Title string
+	Post_User string
 }
 
 const (
@@ -140,7 +144,7 @@ func (node *RaftNode) RequestVote(arguments VoteArguments, reply *VoteReply) err
 	return nil
 }
 
-func readProfiles(filename string) ([]ProfileEntries, error) {
+func readProfie(filename string) ([]ProfileEntries, error) {
     file, err := os.Open(filename)
     if err != nil {
         return nil, err
@@ -157,7 +161,7 @@ func readProfiles(filename string) ([]ProfileEntries, error) {
 }
 
 // Writes all people to a JSON file using Encoder
-func writeProfiles(people []ProfileEntries, filename string) error {
+func writeProfile(people []ProfileEntries, filename string) error {
     file, err := os.Create(filename)
     if err != nil {
         return err
@@ -168,7 +172,7 @@ func writeProfiles(people []ProfileEntries, filename string) error {
     return encoder.Encode(people)
 }
 
-func (node *RaftNode) AppendProfileEntryLeader(arguments AppendProfileArgument, reply *AppendProfileReply) error {
+func (node *RaftNode) AppendEntryLeader(argument CommandEntry, reply *AppendEntryLeaderReply) error {
 	node.mu.Lock()
 	defer node.mu.Unlock()
 
@@ -177,10 +181,9 @@ func (node *RaftNode) AppendProfileEntryLeader(arguments AppendProfileArgument, 
 		reply.Success = false
 		return 
 	} else {
-		node.log = append(node.log, arguments.ProfileEntries...) //append into the leader's log
+		node.log = append(node.log, argument) //append into the leader's log
 		//call every follower to append this log
 		for i, node := range raftNode.serverNodes {
-
 			index = raftNode.nextIndex[i]
 			if index != 1 {
 				prevLogIndex = raftNode.log[index-2].Index
@@ -194,17 +197,17 @@ func (node *RaftNode) AppendProfileEntryLeader(arguments AppendProfileArgument, 
 				entries = []LogEntry{entry}
 			}
 	
-			args := AppendProfileArgument{
+			args := AppendEntryArgument{
 				Term:         raftNode.currentTerm,
 				LeaderID:     raftNode.selfID,
 				PrevLogIndex: prevLogIndex,
 				PrevLogTerm:  prevLogTerm,
-				Entries:      arguments.ProfileEntries,
+				Entries:      []CommandEntry{argument},
 				LeaderCommit: raftNode.commitIndex,
 			}
 	
 			go func(node ServerConnection, index int) {
-				var reply AppendProfileReply
+				var reply AppendEntryReply
 				err := node.rpcConnection.Call("RaftNode.AppendProfileEntryFollower", args, &reply)
 				if err != nil {
 					log.Printf("Error sending AppendEntry to node %d: %v", node.serverID, err)
@@ -220,15 +223,17 @@ func (node *RaftNode) AppendProfileEntryLeader(arguments AppendProfileArgument, 
 						raftNode.nextIndex[index]++
 						raftNode.matchIndex[index]++
 						//leader has to write to its own harddisk
-						profiles, err := readProfile("profiles.json")
+						entryToCommit = raftNode.log[len(raftNode.log)-1]
+						fileToWrite = entryToCommit.LogType + ".json"
+						profiles, err := readProfile(fileToWrite)
 						if err != nil {
 							panic(err) // Proper error handling is needed in production code
-							log.Println("error in reading profiles")
+							log.Println("error in reading file")
 						}
 						profiles = append(profile, arguments.ProfileEntries)
-						if err := writePeople(profiles, "profiles.json"); err != nil {
+						if err := writePeople(profiles, fileToWrite); err != nil {
 							panic(err) 
-							log.Pritnln("error in writing profiles")
+							log.Pritnln("error in writing file")
 						}
 					} else {
 						raftNode.nextIndex[index]--
@@ -245,60 +250,6 @@ func (node *RaftNode) AppendProfileEntryLeader(arguments AppendProfileArgument, 
 		}
 	}
 }
-
-
-//here we implement the appendProfile RPC
-func (node *RaftNode) AppendProfileEntryFollower(arguments AppendProfileArgument, reply *AppendProfileReply) error {
-	// if this is follower, do above:
-	node.mu.Lock()
-	defer node.mu.Unlock()
-
-
-	reply.Term = node.currentTerm
-
-	// 1. Reply false if term < currentTerm (§5.1)
-	if arguments.Term < node.currentTerm {
-		reply.Success = false
-		return nil
-	}
-
-	node.currentTerm = arguments.Term
-
-	if len(node.log) == 0 {
-		if arguments.PrevLogIndex == 0 {
-			// If log is empty and PrevLogIndex is also 0, the entry can be appended directly
-			if len(arguments.Entries) > 0 {
-				node.log = append(node.log, arguments.Entries...)
-				log.Println("Added new log entry with index " + strconv.Itoa(node.log[len(node.log)-1].Index))
-			}
-			reply.Success = true
-		} else {
-			// If log is empty and PrevLogIndex is non-zero, there's an inconsistency
-			reply.Success = false
-		}
-	} else {
-			// 2. Reply false if log doesn’t contain an entry at prevLogIndex whose term matches prevLogTerm
-		if len(node.log) < arguments.PrevLogIndex || node.log[arguments.PrevLogIndex-1].Term != arguments.PrevLogTerm {
-			reply.Success = false
-		}
-		// 3. If an existing entry conflicts with a new one (same index but different terms), delete the existing entry and all that follow it
-		if len(node.log) >= arguments.PrevLogIndex && node.log[arguments.PrevLogIndex-1].Term != arguments.PrevLogTerm {
-			node.log = node.log[:arguments.PrevLogIndex-1]
-			reply.Success = false
-		} else {
-			reply.Success = true
-			// 4. Append any new entries not already in the log
-			// this might has to be done in a forloop? NOTE FOR FUTURE
-			if len(arguments.Entries) > 0 {
-				node.log = append(node.log, arguments.Entries...)
-				log.Println("Added new log entry with index " + strconv.Itoa(node.log[len(node.log)-1].Index))
-			}
-		}
-	}
-	}
-	
-	
-
 
 
 func (node *RaftNode) AppendEntry(arguments AppendEntryArgument, reply *AppendEntryReply) error {
@@ -349,7 +300,9 @@ func (node *RaftNode) AppendEntry(arguments AppendEntryArgument, reply *AppendEn
 	}
 	// 5. If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index of last new entry)
 	if arguments.LeaderCommit > node.commitIndex {
+		original_index = float64(len(node.log))
 		node.commitIndex = int(math.Min(float64(arguments.LeaderCommit), float64(len(node.log))))
+		write//TODO
 	}
 
 	// reset timer if heartbeat
