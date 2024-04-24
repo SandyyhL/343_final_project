@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"log"
 	"math"
@@ -12,7 +13,6 @@ import (
 	"strconv"
 	"sync"
 	"time"
-	"encoding/json"
 )
 
 type RaftNode struct {
@@ -25,10 +25,9 @@ type RaftNode struct {
 	serverNodes   []ServerConnection
 	votedFor      int
 	commitIndex   int
-	log        []LogEntry
-	matchIndex []int
-	nextIndex  []int
-	currentLeader int
+	log           []LogEntry
+	matchIndex    []int
+	nextIndex     []int
 }
 
 type VoteArguments struct {
@@ -52,10 +51,6 @@ type AppendEntryArgument struct {
 	LeaderCommit int
 }
 
-type AppendEntryLeaderReply struct {
-	Success bool
-}
-
 type AppendEntryReply struct {
 	Term    int
 	Success bool
@@ -68,34 +63,38 @@ type ServerConnection struct {
 }
 
 type LogEntry struct {
-	Index int
-	Term  int
+	Index          int
+	Term           int
 	CommandEntries []CommandEntry
 }
 
 type CommandEntry struct {
-	LogType string
-	Profile_Acronym string
-	Profile_Bio string
-	Profile_DisplayName string
-	Profile_Email string
-	Profile_Friends []string
-	Profile_ID int
-	Profile_Name string
-	Profile_Photo string
-	Profile_Status string
-	Profile_Username string
-	Message_ID int
-	Message_Timestamp string
-	Message_User string
-	Message_Text string
-	Post_Date string
-	Post_Location string
-	Post_Rating int
-	Post_Description string
-	Post_Timestamp string
-	Post_Title string
-	Post_User string
+	LogType               string
+	Profile_Acronym       string
+	Profile_Bio           string
+	Profile_DisplayName   string
+	Profile_Email         string
+	Profile_Friends       []string
+	Profile_ID            int
+	Profile_Name          string
+	Profile_Photo         string
+	Profile_Status        string
+	Profile_Username      string
+	Message_ID            int
+	Message_Timestamp     string
+	Message_User          string
+	Message_Text          string
+	Post_Date             string
+	Post_Location         string
+	Post_Rating           int
+	Post_Text_description string
+	Post_Timestamp        string
+	Post_Title            string
+	Post_User             string
+}
+
+type CommandEntryReply struct {
+	Success bool
 }
 
 const (
@@ -143,114 +142,6 @@ func (node *RaftNode) RequestVote(arguments VoteArguments, reply *VoteReply) err
 
 	return nil
 }
-
-func readProfie(filename string) ([]ProfileEntries, error) {
-    file, err := os.Open(filename)
-    if err != nil {
-        return nil, err
-    }
-    defer file.Close()
-
-    var people []ProfileEntries
-    decoder := json.NewDecoder(file)
-    // Assuming the file contains an array of People
-    if err := decoder.Decode(&people); err != nil {
-        return nil, err
-    }
-    return people, nil
-}
-
-// Writes all people to a JSON file using Encoder
-func writeProfile(people []ProfileEntries, filename string) error {
-    file, err := os.Create(filename)
-    if err != nil {
-        return err
-    }
-    defer file.Close()
-
-    encoder := json.NewEncoder(file)
-    return encoder.Encode(people)
-}
-
-func (node *RaftNode) AppendEntryLeader(argument CommandEntry, reply *AppendEntryLeaderReply) error {
-	node.mu.Lock()
-	defer node.mu.Unlock()
-
-	if node.status != "leader" {
-		//direct the client to the right leader
-		reply.Success = false
-		return 
-	} else {
-		node.log = append(node.log, argument) //append into the leader's log
-		//call every follower to append this log
-		for i, node := range raftNode.serverNodes {
-			index = raftNode.nextIndex[i]
-			if index != 1 {
-				prevLogIndex = raftNode.log[index-2].Index
-				prevLogTerm = raftNode.log[index-2].Term
-			} else {
-				prevLogIndex = 0
-				prevLogTerm = 0
-			}
-			if newEntry {
-				entry := raftNode.log[index-1]
-				entries = []LogEntry{entry}
-			}
-	
-			args := AppendEntryArgument{
-				Term:         raftNode.currentTerm,
-				LeaderID:     raftNode.selfID,
-				PrevLogIndex: prevLogIndex,
-				PrevLogTerm:  prevLogTerm,
-				Entries:      []CommandEntry{argument},
-				LeaderCommit: raftNode.commitIndex,
-			}
-	
-			go func(node ServerConnection, index int) {
-				var reply AppendEntryReply
-				err := node.rpcConnection.Call("RaftNode.AppendProfileEntryFollower", args, &reply)
-				if err != nil {
-					log.Printf("Error sending AppendEntry to node %d: %v", node.serverID, err)
-					return
-				}
-	
-				if newEntry {
-					if reply.Success {
-						repliesReceived++
-						if repliesReceived >= majority {
-							raftNode.commitIndex++
-						}
-						raftNode.nextIndex[index]++
-						raftNode.matchIndex[index]++
-						//leader has to write to its own harddisk
-						entryToCommit = raftNode.log[len(raftNode.log)-1]
-						fileToWrite = entryToCommit.LogType + ".json"
-						profiles, err := readProfile(fileToWrite)
-						if err != nil {
-							panic(err) // Proper error handling is needed in production code
-							log.Println("error in reading file")
-						}
-						profiles = append(profile, arguments.ProfileEntries)
-						if err := writePeople(profiles, fileToWrite); err != nil {
-							panic(err) 
-							log.Pritnln("error in writing file")
-						}
-					} else {
-						raftNode.nextIndex[index]--
-					}
-				}
-				if reply.Term > raftNode.currentTerm {
-					raftNode.currentTerm = reply.Term
-					raftNode.votedFor = -1
-					raftNode.status = "follower"
-					fmt.Println("Reverting to follower...")
-					raftNode.resetElectionTimer()
-				}
-			}(node, i)
-		}
-	}
-}
-
 
 func (node *RaftNode) AppendEntry(arguments AppendEntryArgument, reply *AppendEntryReply) error {
 	node.mu.Lock()
@@ -300,16 +191,14 @@ func (node *RaftNode) AppendEntry(arguments AppendEntryArgument, reply *AppendEn
 	}
 	// 5. If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index of last new entry)
 	if arguments.LeaderCommit > node.commitIndex {
-		original_index = float64(len(node.log))
 		node.commitIndex = int(math.Min(float64(arguments.LeaderCommit), float64(len(node.log))))
-		write//TODO
 	}
 
 	// reset timer if heartbeat
 	if len(arguments.Entries) == 0 {
 		node.resetElectionTimer()
 	}
-	
+
 	if node.votedFor != -1 {
 		node.votedFor = -1
 	}
@@ -381,7 +270,7 @@ func (raftNode *RaftNode) LeaderElection() {
 func (node *RaftNode) Heartbeat() {
 	ticker := time.NewTicker(HeartbeatInterval * time.Millisecond)
 	defer ticker.Stop()
-
+	var emptyCommand CommandEntry
 	for range ticker.C {
 		// Check if the node is still in the leader state
 		if node.status != "leader" {
@@ -389,11 +278,12 @@ func (node *RaftNode) Heartbeat() {
 		}
 
 		fmt.Println("Sending heartbeat to followers...")
-		go node.appendEntriesToFollowers(false)
+
+		go node.appendEntriesToFollowers(false, emptyCommand)
 	}
 }
 
-func (raftNode *RaftNode) appendEntriesToFollowers(newEntry bool) {
+func (raftNode *RaftNode) appendEntriesToFollowers(newEntry bool, data CommandEntry) {
 	raftNode.mu.Lock()
 	defer raftNode.mu.Unlock()
 
@@ -442,12 +332,18 @@ func (raftNode *RaftNode) appendEntriesToFollowers(newEntry bool) {
 					repliesReceived++
 					if repliesReceived >= majority {
 						raftNode.commitIndex++
+						// Write the data to the appropriate JSON file based on LogType and ID
+						err := raftNode.writeToJSONFile(data, data.LogType)
+						if err != nil {
+							print(err)
+						}
 					}
 					raftNode.nextIndex[index]++
 					raftNode.matchIndex[index]++
 
 				} else {
 					raftNode.nextIndex[index]--
+					raftNode.resendLogEntryToFollowers(index)
 				}
 			}
 			if reply.Term > raftNode.currentTerm {
@@ -458,6 +354,55 @@ func (raftNode *RaftNode) appendEntriesToFollowers(newEntry bool) {
 				raftNode.resetElectionTimer()
 			}
 		}(node, i)
+	}
+}
+
+func (raftNode *RaftNode) resendLogEntryToFollowers(nodeIndex int) {
+	raftNode.mu.Lock()
+	defer raftNode.mu.Unlock()
+
+	var entries []LogEntry
+	var prevLogIndex int
+	var prevLogTerm int
+	var index int
+
+	node := raftNode.serverNodes[nodeIndex]
+
+	index = raftNode.nextIndex[nodeIndex]
+	if index != 1 {
+		prevLogIndex = raftNode.log[index-2].Index
+		prevLogTerm = raftNode.log[index-2].Term
+	} else {
+		prevLogIndex = 0
+		prevLogTerm = 0
+	}
+
+	entry := raftNode.log[index-1]
+	entries = []LogEntry{entry}
+
+	args := AppendEntryArgument{
+		Term:         raftNode.currentTerm,
+		LeaderID:     raftNode.selfID,
+		PrevLogIndex: prevLogIndex,
+		PrevLogTerm:  prevLogTerm,
+		Entries:      entries,
+		LeaderCommit: raftNode.commitIndex,
+	}
+
+	var reply AppendEntryReply
+	err := node.rpcConnection.Call("RaftNode.AppendEntry", args, &reply)
+	if err != nil {
+		log.Printf("Error sending AppendEntry to node %d: %v", node.serverID, err)
+		return
+	}
+
+	if reply.Success {
+		raftNode.nextIndex[nodeIndex]++
+		raftNode.matchIndex[nodeIndex]++
+		return
+	} else {
+		raftNode.nextIndex[nodeIndex]--
+		raftNode.resendLogEntryToFollowers(nodeIndex)
 	}
 }
 
@@ -472,22 +417,59 @@ func randomElectionTimeout() time.Duration {
 	return time.Duration(rand.Intn(ElectionTimeoutMax-ElectionTimeoutMin)+ElectionTimeoutMin) * time.Millisecond
 }
 
-func (raftNode *RaftNode) ClientAddToLog() {
-	for {
-		if raftNode.status == "leader" {
-			// raftNode.lastApplied = len(raftNode.log)
-			entry := LogEntry{len(raftNode.log) + 1, raftNode.currentTerm}
-			log.Println("Client communication created the new log entry at index " + strconv.Itoa(entry.Index))
-			raftNode.log = append(raftNode.log, entry)
-			raftNode.appendEntriesToFollowers(true)
-		}
-		// HINT 2: force the thread to sleep for a good amount of time (less
-		// than that of the leader election timer) and then repeat the actions above.
-		// You may use an endless loop here or recursively call the function
-		// HINT 3: you don’t need to add to the logic of creating new log
-		// entries, just handle the replication
-		time.Sleep(3000 * time.Millisecond)
+func (raftNode *RaftNode) ClientWrite(data CommandEntry, reply *CommandEntryReply) error {
+	raftNode.mu.Lock()
+	defer raftNode.mu.Unlock()
+
+	if raftNode.status != "leader" {
+		// If this node is not the leader, reject the client write request
+		reply.Success = false
+		return nil
 	}
+
+	// Append the client's data to the log and replicate it to followers
+	entry := LogEntry{
+		Index:          len(raftNode.log) + 1,
+		Term:           raftNode.currentTerm,
+		CommandEntries: []CommandEntry{data},
+	}
+
+	raftNode.log = append(raftNode.log, entry)
+	raftNode.appendEntriesToFollowers(true, data)
+
+	// Respond to the client indicating success
+	reply.Success = true
+	return nil
+}
+
+func (raftNode *RaftNode) writeToJSONFile(data CommandEntry, fileN string) error {
+	// Determine the filename based on the LogType
+	filename := fileN + ".json"
+
+	// Read existing data from the JSON file, if any
+	existingData := make([]CommandEntry, 0)
+	file, err := os.ReadFile(filename)
+	if err == nil {
+		err = json.Unmarshal(file, &existingData)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Append the new data to the existing data
+	existingData = append(existingData, data)
+
+	// Write the updated data to the JSON file
+	fileData, err := json.MarshalIndent(existingData, "", "    ")
+	if err != nil {
+		return err
+	}
+	err = os.WriteFile(filename, fileData, 0644)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (raftNode *RaftNode) initMatchIndex() {
@@ -569,9 +551,6 @@ func main() {
 	}
 
 	raftNode.resetElectionTimer()
-
-	// Start the ClientAddToLog function in a separate thread
-	go raftNode.ClientAddToLog()
 
 	select {}
 }
