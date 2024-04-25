@@ -459,87 +459,67 @@ func (raftNode *RaftNode) ClientWrite(data CommandEntry, reply *CommandEntryRepl
 	raftNode.log = append(raftNode.log, entry)
 	raftNode.appendEntriesToFollowers(true, data)
 
-	// Respond to the client indicating success
 	reply.Success = true
 	return nil
 }
 
 func (raftNode *RaftNode) ClientRead(request ClientReadEntry, reply *ClientReadReply) error {
-	raftNode.mu.Lock()
-	defer raftNode.mu.Unlock()
+    raftNode.mu.Lock()
+    defer raftNode.mu.Unlock()
 
-	if raftNode.status != "leader" {
-		// If this node is not the leader, reject the client read request
-		reply.Success = false
-		return nil
-	}
+    if raftNode.status != "leader" {
+        reply.Success = false
+        return nil
+    }
 
-	if request.FileType == "profile" {
-		//handle profile
-		var allProfileEntries = readFromJSONFile(request.FileType)
-		if request.Profile_All {
-			reply.Entries = allProfileEntries
-			reply.Success = true
-			return nil
-		} else {
-			var toReturn []CommandEntries
-			var user = request.Profile_ID
-			for index, entry := range allProfileEntries {
-				if entry.Profile_ID = request.Profile_ID {
-					toReturn = append(toReturn, entry)
-				} 
-			}
-			reply.Entries = toReturn
-			reply.Success = true
-			return nil
-		}
-	}
+    fileTypeFilename := request.FileType + ".json"
+    allEntries, err := readFromJSONFile(fileTypeFilename)
+    if err != nil {
+        reply.Success = false
+        return err
+    }
 
-	if request.FileType == "message" {
-		//handle message
-		var allMessages = readFromJSONFile(request.FileType)
-		if request.Message_All {
-			reply.Entries = allMessages
-		}
-		reply.Success = true
-		return nil
-	}
+    switch request.FileType {
+    case "profile":
+        if request.Profile_All {
+            reply.Entries = allEntries
+            reply.Success = true
+        } else {
+            var toReturn []CommandEntry
+            for _, entry := range allEntries {
+                if entry.Profile_ID == request.Profile_ID {
+                    toReturn = append(toReturn, entry)
+                }
+            }
+            reply.Entries = toReturn
+            reply.Success = true
+        }
+    case "message":
+        if request.Message_All {
+            reply.Entries = allEntries
+            reply.Success = true
+        }
+    case "post":
+        if request.Post_All {
+            reply.Entries = allEntries
+            reply.Success = true
+        } else {
+            var toReturn []CommandEntry
+            for _, entry := range allEntries {
+                if request.Post_OneUser && entry.Post_User == request.Post_User {
+                    toReturn = append(toReturn, entry)
+                } else if request.Post_OneTitle && entry.Post_Title == request.Post_Title {
+                    toReturn = append(toReturn, entry)
+                }
+            }
+            reply.Entries = toReturn
+            reply.Success = true
+        }
+    default:
+        reply.Success = false
+    }
 
-	if request.FileType == "post" {
-		//handle post
-		var allPosts = readFromJSONFile(request.FileType)
-		if request.Post_All {
-			reply.Entries = allPosts
-			reply.Success = true
-			return nil
-		} else {
-			var toReturn []CommandEntries
-			if Post_OneUser {
-				var user = request.Post_User
-				for index, entry := range allPosts {
-					if entry.Post_User == user {
-						toReturn = append(toReturn, entry)
-					}
-				}
-				reply.Entries = toReturn
-				reply.Success = true
-				return nil
-			}
-			if Post_OneTitle {
-				var title = request.Post_Title
-				for index, entry := range allPosts {
-					if entry.Post_User == user && entry.Post_Title == title {
-						toReturn = append(toReturn, entry)
-						reply.Entries = toReturn
-						reply.Success = true
-						return nil
-					}
-				}
-			}
-		}
-	}
-	reply.Success = false
-	return nil
+    return nil
 }
 
 func (raftNode *RaftNode) writeToJSONFile(data CommandEntry, fileN string) error {
