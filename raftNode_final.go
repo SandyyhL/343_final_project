@@ -65,57 +65,27 @@ type ServerConnection struct {
 type LogEntry struct {
 	Index          int
 	Term           int
-	CommandEntries []CommandEntry
+	CommandEntries []ClientWriteEntry
 }
 
-type CommandEntry struct {
-	LogType               string
-	Profile_Acronym       string
-	Profile_Bio           string
-	Profile_DisplayName   string
-	Profile_Email         string
-	Profile_Friends       []string
-	Profile_ID            int
-	Profile_Name          string
-	Profile_Photo         string
-	Profile_Status        string
-	Profile_Username      string
-	Message_ID            int
-	Message_Timestamp     string
-	Message_User          string
-	Message_Text          string
-	Post_Date             string
-	Post_Location         string
-	Post_Rating           int
-	Post_Text_description string
-	Post_Timestamp        string
-	Post_Title            string
-	Post_User             string
+type ClientWriteEntry struct {
+	Filename string
+	ID string
+	Data string
 }
 
-type CommandEntryReply struct {
+type ClientWriteReply struct {
 	Success bool
 }
 
 type ClientReadEntry struct {
-	FileType 			  string
-	//get one specific profile
-	Profile_ID			  int
-	Profile_All           bool
-	//get messages
-	Message_All			  bool
-	//get posts of a specific user
-	Post_OneUser          bool
-	Post_User			  string
-	//get one specific posts
-	Post_OneTitle         bool
-	Post_Title            string
-	//get all posts
-	Post_All              bool
+	Filename string
+	Column string // either "ID" or "User"
+	Value string
 }
 
 type ClientReadReply struct {
-	Entries []CommandEntry
+	Data []string
 	Success bool
 }
 
