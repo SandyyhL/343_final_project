@@ -65,7 +65,7 @@ type ServerConnection struct {
 type LogEntry struct {
 	Index          int
 	Term           int
-	CommandEntries []ClientWriteEntry
+	Entries []ClientWriteEntry
 }
 
 type ClientWriteEntry struct {
@@ -262,7 +262,7 @@ func (raftNode *RaftNode) LeaderElection() {
 func (node *RaftNode) Heartbeat() {
 	ticker := time.NewTicker(HeartbeatInterval * time.Millisecond)
 	defer ticker.Stop()
-	var emptyCommand CommandEntry
+	var emptyEntry ClientWriteEntry
 	for range ticker.C {
 		// Check if the node is still in the leader state
 		if node.status != "leader" {
@@ -275,7 +275,7 @@ func (node *RaftNode) Heartbeat() {
 	}
 }
 
-func (raftNode *RaftNode) appendEntriesToFollowers(newEntry bool, data CommandEntry) {
+func (raftNode *RaftNode) appendEntriesToFollowers(newEntry bool, data ClientWriteEntry) {
 	raftNode.mu.Lock()
 	defer raftNode.mu.Unlock()
 
@@ -409,7 +409,7 @@ func randomElectionTimeout() time.Duration {
 	return time.Duration(rand.Intn(ElectionTimeoutMax-ElectionTimeoutMin)+ElectionTimeoutMin) * time.Millisecond
 }
 
-func (raftNode *RaftNode) ClientWrite(data CommandEntry, reply *CommandEntryReply) error {
+func (raftNode *RaftNode) ClientWrite(data ClientWriteEntry, reply *ClientWriteReply) error {
 	raftNode.mu.Lock()
 	defer raftNode.mu.Unlock()
 
@@ -421,15 +421,64 @@ func (raftNode *RaftNode) ClientWrite(data CommandEntry, reply *CommandEntryRepl
 
 	// Append the client's data to the log and replicate it to followers
 	entry := LogEntry{
-		Index:          len(raftNode.log) + 1,
-		Term:           raftNode.currentTerm,
-		CommandEntries: []CommandEntry{data},
+		Index:   len(raftNode.log) + 1,
+		Term:    raftNode.currentTerm,
+		Entries: []ClientWriteEntry{data},
 	}
 
 	raftNode.log = append(raftNode.log, entry)
 	raftNode.appendEntriesToFollowers(true, data)
 
 	reply.Success = true
+	return nil
+}
+
+// creates a file of the following type: {
+//     "456": {
+//         "acronym": "",
+//         "bio": "",
+//         "email": "",
+//         "id": ""
+//     },
+//     "123": {
+//         "acronym": "",
+//         "bio": "",
+//         "email": "",
+//         "id": ""
+//     }
+// }
+func (raftNode *RaftNode) appendToJSONFile(entry ClientWriteEntry) error {
+	
+	filename := entry.Filename + ".json"
+
+	data := make(map[string]string)
+	err := json.Unmarshal([]byte(entry.Data), &data)
+	if err != nil {
+		return err
+	}
+
+	file, err := os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	// Create a new map 
+	newData := map[string]map[string]string{
+		entry.ID: data,
+	}
+
+	fileData, err := json.MarshalIndent(newData, "", "    ")
+	if err != nil {
+		return err
+	}
+
+	// Append the new data to the file
+	_, err = file.Write(fileData)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -492,35 +541,6 @@ func (raftNode *RaftNode) ClientRead(request ClientReadEntry, reply *ClientReadR
     return nil
 }
 
-func (raftNode *RaftNode) writeToJSONFile(data CommandEntry, fileN string) error {
-	// Determine the filename based on the LogType
-	filename := fileN + ".json"
-
-	// Read existing data from the JSON file, if any
-	existingData := make([]CommandEntry, 0)
-	file, err := os.ReadFile(filename)
-	if err == nil {
-		err = json.Unmarshal(file, &existingData)
-		if err != nil {
-			return err
-		}
-	}
-
-	// Append the new data to the existing data
-	existingData = append(existingData, data)
-
-	// Write the updated data to the JSON file
-	fileData, err := json.MarshalIndent(existingData, "", "    ")
-	if err != nil {
-		return err
-	}
-	err = os.WriteFile(filename, fileData, 0644)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
 
 func (raftNode *RaftNode) readFromJSONFile(fileN string) ([]CommandEntry, error) {
 	filename := fileN + ".json"
