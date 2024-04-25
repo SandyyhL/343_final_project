@@ -97,6 +97,28 @@ type CommandEntryReply struct {
 	Success bool
 }
 
+type ClientReadEntry struct {
+	FileType 			  string
+	//get one specific profile
+	Profile_ID			  int
+	Profile_All           bool
+	//get messages
+	Message_All			  bool
+	//get posts of a specific user
+	Post_OneUser          bool
+	Post_User			  string
+	//get one specific posts
+	Post_OneTitle         bool
+	Post_Title            string
+	//get all posts
+	Post_All              bool
+}
+
+type ClientReadReply struct {
+	Entries []CommandEntry
+	Success bool
+}
+
 const (
 	// ElectionTimeoutMin = 300
 	// ElectionTimeoutMax = 600
@@ -442,6 +464,84 @@ func (raftNode *RaftNode) ClientWrite(data CommandEntry, reply *CommandEntryRepl
 	return nil
 }
 
+func (raftNode *RaftNode) ClientRead(request ClientReadEntry, reply *ClientReadReply) error {
+	raftNode.mu.Lock()
+	defer raftNode.mu.Unlock()
+
+	if raftNode.status != "leader" {
+		// If this node is not the leader, reject the client read request
+		reply.Success = false
+		return nil
+	}
+
+	if request.FileType == "profile" {
+		//handle profile
+		var allProfileEntries = readFromJSONFile(request.FileType)
+		if request.Profile_All {
+			reply.Entries = allProfileEntries
+			reply.Success = true
+			return nil
+		} else {
+			var toReturn []CommandEntries
+			var user = request.Profile_ID
+			for index, entry := range allProfileEntries {
+				if entry.Profile_ID = request.Profile_ID {
+					toReturn = append(toReturn, entry)
+				} 
+			}
+			reply.Entries = toReturn
+			reply.Success = true
+			return nil
+		}
+	}
+
+	if request.FileType == "message" {
+		//handle message
+		var allMessages = readFromJSONFile(request.FileType)
+		if request.Message_All {
+			reply.Entries = allMessages
+		}
+		reply.Success = true
+		return nil
+	}
+
+	if request.FileType == "post" {
+		//handle post
+		var allPosts = readFromJSONFile(request.FileType)
+		if request.Post_All {
+			reply.Entries = allPosts
+			reply.Success = true
+			return nil
+		} else {
+			var toReturn []CommandEntries
+			if Post_OneUser {
+				var user = request.Post_User
+				for index, entry := range allPosts {
+					if entry.Post_User == user {
+						toReturn = append(toReturn, entry)
+					}
+				}
+				reply.Entries = toReturn
+				reply.Success = true
+				return nil
+			}
+			if Post_OneTitle {
+				var title = request.Post_Title
+				for index, entry := range allPosts {
+					if entry.Post_User == user && entry.Post_Title == title {
+						toReturn = append(toReturn, entry)
+						reply.Entries = toReturn
+						reply.Success = true
+						return nil
+					}
+				}
+			}
+		}
+	}
+	reply.Success = false
+	return nil
+}
+
 func (raftNode *RaftNode) writeToJSONFile(data CommandEntry, fileN string) error {
 	// Determine the filename based on the LogType
 	filename := fileN + ".json"
@@ -471,6 +571,24 @@ func (raftNode *RaftNode) writeToJSONFile(data CommandEntry, fileN string) error
 
 	return nil
 }
+
+func (raftNode *RaftNode) readFromJSONFile(fileN string) ([]CommandEntry, error) {
+	filename := fileN + ".json"
+
+	var existingData := make([]CommandEntry, 0)
+	file, err := os.ReadFile(filename)
+	if err != nil {
+		return nil, err  // Return the error if file reading fails
+	}
+
+	err = json.Unmarshal(file, &existingData)
+	if err != nil {
+		return nil, err  // Return the error if JSON unmarshaling fails
+	}
+
+	return existingData, nil
+}
+
 
 func (raftNode *RaftNode) initMatchIndex() {
 	raftNode.matchIndex = make([]int, len(raftNode.serverNodes))
