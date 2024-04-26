@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"sync"
 	"time"
+	"strings"
 )
 
 type RaftNode struct {
@@ -281,7 +282,7 @@ func (node *RaftNode) Heartbeat() {
 
 		fmt.Println("Sending heartbeat to followers...")
 
-		go node.appendEntriesToFollowers(false, emptyCommand)
+		go node.appendEntriesToFollowers(false, emptyEntry)
 	}
 }
 
@@ -334,8 +335,7 @@ func (raftNode *RaftNode) appendEntriesToFollowers(newEntry bool, data ClientWri
 					repliesReceived++
 					if repliesReceived >= majority {
 						raftNode.commitIndex++
-						// Write the data to the appropriate JSON file based on LogType and ID
-						err := raftNode.writeToJSONFile(data, data.LogType)
+						err := raftNode.appendToJSONFile(data)
 						if err != nil {
 							print(err)
 						}
@@ -454,7 +454,7 @@ func (raftNode *RaftNode) ClientRead(request ClientReadEntry, reply *ClientReadR
     }
 
     fileTypeFilename := request.Filename + ".json"
-    allEntries, err := readFromJSONFile(fileTypeFilename) // Assume returns ([]string, error)
+    allEntries, err := raftNode.readFromJSONFile(fileTypeFilename) // Assume returns ([]string, error)
     if err != nil {
         reply.Success = false
         return err
@@ -531,10 +531,10 @@ func (raftNode *RaftNode) appendToJSONFile(entry ClientWriteEntry) error {
 
 
 
-func (raftNode *RaftNode) readFromJSONFile(fileN string) ([]String, error) {
+func (raftNode *RaftNode) readFromJSONFile(fileN string) ([]string, error) {
 	filename := fileN + ".json"
 
-	var existingData := make([]String, 0)
+	existingData := make([]string, 0)
 	file, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, err  // Return the error if file reading fails
