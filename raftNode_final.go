@@ -84,6 +84,16 @@ type ClientReadEntry struct {
 	Value string
 }
 
+//how should the string loook like?
+
+//"file: profile, acronym: AL, bio: Hi there!, email: 1234@wellesley.edu, id: abcde12345, name: Wendy Wellesley, 
+// photo: www.wellesley.edu", status: offline"
+
+//"file: post, author: Wendy Wellesley, categories: ___, date: 2024-03-30, dateOrder: april9, location: Wellesley Cheese Shop,
+// profilePic: ____(url)__, text_description: sthsthsth, timestamp: 4/09/2024"
+
+//"file: message, dateOrder: april9, title: blabla"
+
 type ClientReadReply struct {
 	Data []string
 	Success bool
@@ -433,6 +443,43 @@ func (raftNode *RaftNode) ClientWrite(data ClientWriteEntry, reply *ClientWriteR
 	return nil
 }
 
+
+func (raftNode *RaftNode) ClientRead(request ClientReadEntry, reply *ClientReadReply) error {
+    raftNode.mu.Lock()
+    defer raftNode.mu.Unlock()
+
+    if raftNode.status != "leader" {
+        reply.Success = false
+        return nil
+    }
+
+    fileTypeFilename := request.Filename + ".json"
+    allEntries, err := readFromJSONFile(fileTypeFilename) // Assume returns ([]string, error)
+    if err != nil {
+        reply.Success = false
+        return err
+    }
+
+    if request.Value == "all" {
+        reply.Data = allEntries
+        reply.Success = true
+        return nil
+    }
+
+    searchCriteria := fmt.Sprintf("%s: %s", request.Column, request.Value)
+    
+    for _, entry := range allEntries {
+        if strings.Contains(entry, searchCriteria) {
+            reply.Data = append(reply.Data, entry)
+        }
+    }
+
+    // Set success based on whether any entries were found
+    reply.Success = len(reply.Data) > 0
+
+    return nil
+}
+
 // creates a file of the following type: {
 //     "456": {
 //         "acronym": "",
@@ -482,70 +529,12 @@ func (raftNode *RaftNode) appendToJSONFile(entry ClientWriteEntry) error {
 	return nil
 }
 
-func (raftNode *RaftNode) ClientRead(request ClientReadEntry, reply *ClientReadReply) error {
-    raftNode.mu.Lock()
-    defer raftNode.mu.Unlock()
-
-    if raftNode.status != "leader" {
-        reply.Success = false
-        return nil
-    }
-
-    fileTypeFilename := request.FileType + ".json"
-    allEntries, err := readFromJSONFile(fileTypeFilename)
-    if err != nil {
-        reply.Success = false
-        return err
-    }
-
-    switch request.FileType {
-    case "profile":
-        if request.Profile_All {
-            reply.Entries = allEntries
-            reply.Success = true
-        } else {
-            var toReturn []CommandEntry
-            for _, entry := range allEntries {
-                if entry.Profile_ID == request.Profile_ID {
-                    toReturn = append(toReturn, entry)
-                }
-            }
-            reply.Entries = toReturn
-            reply.Success = true
-        }
-    case "message":
-        if request.Message_All {
-            reply.Entries = allEntries
-            reply.Success = true
-        }
-    case "post":
-        if request.Post_All {
-            reply.Entries = allEntries
-            reply.Success = true
-        } else {
-            var toReturn []CommandEntry
-            for _, entry := range allEntries {
-                if request.Post_OneUser && entry.Post_User == request.Post_User {
-                    toReturn = append(toReturn, entry)
-                } else if request.Post_OneTitle && entry.Post_Title == request.Post_Title {
-                    toReturn = append(toReturn, entry)
-                }
-            }
-            reply.Entries = toReturn
-            reply.Success = true
-        }
-    default:
-        reply.Success = false
-    }
-
-    return nil
-}
 
 
-func (raftNode *RaftNode) readFromJSONFile(fileN string) ([]CommandEntry, error) {
+func (raftNode *RaftNode) readFromJSONFile(fileN string) ([]String, error) {
 	filename := fileN + ".json"
 
-	var existingData := make([]CommandEntry, 0)
+	var existingData := make([]String, 0)
 	file, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, err  // Return the error if file reading fails
