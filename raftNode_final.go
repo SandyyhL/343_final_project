@@ -26,6 +26,7 @@ type RaftNode struct {
 	serverNodes   []ServerConnection
 	votedFor      int
 	commitIndex   int
+	lastApplied	  int 
 	log           []LogEntry
 	matchIndex    []int
 	nextIndex     []int
@@ -197,6 +198,12 @@ func (node *RaftNode) AppendEntry(arguments AppendEntryArgument, reply *AppendEn
 		node.commitIndex = int(math.Min(float64(arguments.LeaderCommit), float64(len(node.log))))
 	}
 
+	if node.commitIndex > node.lastApplied {
+		data := node.log[node.lastApplied].Entries[0]
+		node.appendToJSONFile(data)
+		node.lastApplied++
+	}
+
 	// reset timer if heartbeat
 	if len(arguments.Entries) == 0 {
 		node.resetElectionTimer()
@@ -335,6 +342,7 @@ func (raftNode *RaftNode) appendEntriesToFollowers(newEntry bool, data ClientWri
 					repliesReceived++
 					if repliesReceived >= majority {
 						raftNode.commitIndex++
+						raftNode.lastApplied++
 						err := raftNode.appendToJSONFile(data)
 						if err != nil {
 							print(err)
@@ -579,7 +587,7 @@ func main() {
 	raftNode.votedFor = -1
 	raftNode.selfID, _ = strconv.Atoi(arguments[1])
 	raftNode.commitIndex = 0
-	//raftNode.lastApplied = 0
+	raftNode.lastApplied = 0
 	raftNode.log = make([]LogEntry, 0)
 
 	file, err := os.Open(arguments[2])
