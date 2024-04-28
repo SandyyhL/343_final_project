@@ -504,7 +504,7 @@ func (raftNode *RaftNode) ClientRead(request ClientReadEntry, reply *ClientReadR
 //	}
 func (raftNode *RaftNode) appendToJSONFile(entry ClientWriteEntry) error {
 
-	filename := entry.Filename + ".json"
+	filename := raftNode.folder + entry.Filename + ".json"
 
 	data := make(map[string]string)
 	err := json.Unmarshal([]byte(entry.Data), &data)
@@ -538,7 +538,7 @@ func (raftNode *RaftNode) appendToJSONFile(entry ClientWriteEntry) error {
 }
 
 func (raftNode *RaftNode) readFromJSONFile(fileN string) ([]string, error) {
-	filename := fileN + ".json"
+	filename := raftNode.folder + fileN + ".json"
 
 	existingData := make([]string, 0)
 	file, err := os.ReadFile(filename)
