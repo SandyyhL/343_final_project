@@ -87,16 +87,6 @@ type ClientReadEntry struct {
 	Value    string
 }
 
-//how should the string loook like?
-
-//"file: profile, acronym: AL, bio: Hi there!, email: 1234@wellesley.edu, id: abcde12345, name: Wendy Wellesley,
-// photo: www.wellesley.edu", status: offline"
-
-//"file: post, author: Wendy Wellesley, categories: ___, date: 2024-03-30, dateOrder: april9, location: Wellesley Cheese Shop,
-// profilePic: ____(url)__, text_description: sthsthsth, timestamp: 4/09/2024"
-
-//"file: message, dateOrder: april9, title: blabla"
-
 type ClientReadReply struct {
 	Data    []string
 	Success bool
@@ -446,7 +436,11 @@ func (raftNode *RaftNode) ClientWrite(data ClientWriteEntry, reply *ClientWriteR
 	}
 
 	raftNode.log = append(raftNode.log, entry)
-	raftNode.appendEntriesToFollowers(true, data)
+	err := raftNode.appendToJSONFile(data)
+	if err != nil {
+		log.Printf("Error: ", err)
+	}
+	go raftNode.appendEntriesToFollowers(true, data)
 
 	reply.Success = true
 	return nil
@@ -461,7 +455,7 @@ func (raftNode *RaftNode) ClientRead(request ClientReadEntry, reply *ClientReadR
 		return nil
 	}
 
-	fileTypeFilename := request.Filename + ".json"
+	fileTypeFilename := request.Filename 
 	allEntries, err := raftNode.readFromJSONFile(fileTypeFilename) // Assume returns ([]string, error)
 	if err != nil {
 		reply.Success = false
@@ -504,7 +498,7 @@ func (raftNode *RaftNode) ClientRead(request ClientReadEntry, reply *ClientReadR
 //	}
 func (raftNode *RaftNode) appendToJSONFile(entry ClientWriteEntry) error {
 
-	filename := raftNode.folder + entry.Filename + ".json"
+	filename := raftNode.folder + entry.Filename  + ".json"
 
 	data := make(map[string]string)
 	err := json.Unmarshal([]byte(entry.Data), &data)
