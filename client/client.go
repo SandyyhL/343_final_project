@@ -61,7 +61,7 @@ func (c *Client) ClientRead(entry ClientReadEntry) (ClientReadReply, error) {
 
 func main() {
 	// Initialize the client and connect to the leader's RPC server
-	client, err := NewClient("localhost:8080") // Replace "localhost:8080" with the leader's address
+	client, err := NewClient("localhost:4040") 
 	if err != nil {
 		log.Fatal("Error connecting to the leader:", err)
 	}
