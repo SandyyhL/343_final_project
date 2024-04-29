@@ -31,6 +31,7 @@ type RaftNode struct {
 	matchIndex    []int
 	nextIndex     []int
 	folder        string
+	leaderIP 	  string
 }
 
 type VoteArguments struct {
@@ -79,6 +80,7 @@ type ClientWriteEntry struct {
 
 type ClientWriteReply struct {
 	Success bool
+	LeaderIP string
 }
 
 type ClientReadEntry struct {
@@ -90,6 +92,7 @@ type ClientReadEntry struct {
 type ClientReadReply struct {
 	Data    []string
 	Success bool
+	LeaderIP string
 }
 
 const (
@@ -144,6 +147,7 @@ func (node *RaftNode) AppendEntry(arguments AppendEntryArgument, reply *AppendEn
 
 	log.Printf("%s %d received heartbeat from %x", node.status, node.selfID, arguments.LeaderID)
 
+	node.leaderIP = "localhost:404" + strconv.Itoa(arguments.LeaderID)
 	reply.Term = node.currentTerm
 
 	// 1. Reply false if term < currentTerm (§5.1)
@@ -430,6 +434,9 @@ func (raftNode *RaftNode) ClientWrite(data ClientWriteEntry, reply *ClientWriteR
 
 	if raftNode.status != "leader" {
 		// If this node is not the leader, reject the client write request
+		if raftNode.leaderIP != "-1" {
+			reply.LeaderIP = raftNode.leaderIP
+		}
 		reply.Success = false
 		return nil
 	}
@@ -459,6 +466,9 @@ func (raftNode *RaftNode) ClientRead(request ClientReadEntry, reply *ClientReadR
 	defer raftNode.mu.Unlock()
 
 	if raftNode.status != "leader" {
+		if raftNode.leaderIP != "-1" {
+			reply.LeaderIP = raftNode.leaderIP
+		}
 		reply.Success = false
 		return nil
 	}
@@ -642,6 +652,7 @@ func main() {
 	raftNode.lastApplied = 0
 	raftNode.log = make([]LogEntry, 0)
 	raftNode.folder = "folder" + strconv.Itoa(raftNode.selfID) + "/"
+	raftNode.leaderIP = "-1"
 
 	file, err := os.Open(arguments[2])
 	if err != nil {

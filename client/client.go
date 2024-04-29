@@ -18,6 +18,7 @@ type ClientWriteEntry struct {
 
 type ClientWriteReply struct {
 	Success bool
+	LeaderIP string
 }
 
 type ClientReadEntry struct {
@@ -29,6 +30,7 @@ type ClientReadEntry struct {
 type ClientReadReply struct {
 	Data    []string
 	Success bool
+	LeaderIP string
 }
 
 // Function to initialize the client by connecting to the leader's RPC server
