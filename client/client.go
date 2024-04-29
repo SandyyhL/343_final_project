@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/rpc"
+	"time"
 )
 
 type Client struct {
@@ -61,7 +62,7 @@ func (c *Client) ClientRead(entry ClientReadEntry) (ClientReadReply, error) {
 
 func main() {
 	// Initialize the client and connect to the leader's RPC server
-	client, err := NewClient("localhost:4042") 
+	client, err := NewClient("localhost:4041") 
 	if err != nil {
 		log.Fatal("Error connecting to the leader:", err)
 	}
@@ -77,10 +78,12 @@ func main() {
 		log.Fatal("Error writing data:", err)
 	}
 
+	time.Sleep(5 * time.Second)
+
 	// Example usage: read data
 	readEntry := ClientReadEntry{
 		Filename: "profile",
-		Column:	"ID",
+		Column:	"id",
 		Value: "123",
 	}
 	reply, err := client.ClientRead(readEntry)

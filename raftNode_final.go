@@ -191,6 +191,7 @@ func (node *RaftNode) AppendEntry(arguments AppendEntryArgument, reply *AppendEn
 
 	if node.commitIndex > node.lastApplied {
 		data := node.log[node.lastApplied].Entries[0]
+		log.Println("Append Entry: Append to file")
 		node.appendToFile(data)
 		node.lastApplied++
 	}
@@ -338,6 +339,7 @@ func (raftNode *RaftNode) appendEntriesToFollowers(newEntry bool, data ClientWri
 					if repliesReceived >= majority {
 						raftNode.commitIndex++
 						raftNode.lastApplied++
+						log.Println("AppendEntriesToFollowers: Append to File")
 						err := raftNode.appendToFile(data)
 						if err != nil {
 							print(err)
@@ -345,7 +347,6 @@ func (raftNode *RaftNode) appendEntriesToFollowers(newEntry bool, data ClientWri
 					}
 					raftNode.nextIndex[index]++
 					raftNode.matchIndex[index]++
-
 				} else {
 					raftNode.nextIndex[index]--
 					raftNode.resendLogEntryToFollowers(index)
@@ -436,14 +437,13 @@ func (raftNode *RaftNode) ClientWrite(data ClientWriteEntry, reply *ClientWriteR
 	log.Println("CLIENT WRITE")
 
 	// Append the client's data to the log and replicate it to followers
-	// entry := LogEntry{
-	// 	Index:   len(raftNode.log) + 1,
-	// 	Term:    raftNode.currentTerm,
-	// 	Entries: []ClientWriteEntry{data},
-	// }
+	entry := LogEntry{
+		Index:   len(raftNode.log) + 1,
+		Term:    raftNode.currentTerm,
+		Entries: []ClientWriteEntry{data},
+	}
 
-	// raftNode.log = append(raftNode.log, entry)
-	// err := raftNode.appendToFile(data)
+	raftNode.log = append(raftNode.log, entry)
 
 	// if err != nil {
 	// 	log.Printf("Error: ", err)
@@ -478,7 +478,8 @@ func (raftNode *RaftNode) ClientRead(request ClientReadEntry, reply *ClientReadR
 		return nil
 	}
 
-	searchCriteria := fmt.Sprintf("%s: %s", request.Column, request.Value)
+	searchCriteria := fmt.Sprintf("'%s': '%s'", request.Column, request.Value)
+	log.Println("Search Criteria:", searchCriteria)
 
 	for _, entry := range allEntries {
 		if strings.Contains(entry, searchCriteria) {
@@ -565,8 +566,9 @@ func (raftNode *RaftNode) appendToFile(entry ClientWriteEntry) error {
 // }
 
 func (raftNode *RaftNode) readFile(filename string) ([]string, error) {
-    fullPath := raftNode.folder + filename + ".txt" // Ensure the file extension matches the one used in appendToFile
+	log.Println("INSIDE READFILE.")
 
+    fullPath := raftNode.folder + filename + ".txt" 
     // Open the file
     file, err := os.Open(fullPath)
     if err != nil {
@@ -586,6 +588,7 @@ func (raftNode *RaftNode) readFile(filename string) ([]string, error) {
         return nil, err
     }
 
+	log.Println("lines: ", lines)
     return lines, nil
 }
 
