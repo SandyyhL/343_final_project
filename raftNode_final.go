@@ -147,7 +147,6 @@ func (node *RaftNode) AppendEntry(arguments AppendEntryArgument, reply *AppendEn
 
 	log.Printf("%s %d received heartbeat from %x", node.status, node.selfID, arguments.LeaderID)
 
-	node.leaderIP = "localhost:404" + strconv.Itoa(arguments.LeaderID)
 	reply.Term = node.currentTerm
 
 	// 1. Reply false if term < currentTerm (§5.1)
@@ -155,8 +154,9 @@ func (node *RaftNode) AppendEntry(arguments AppendEntryArgument, reply *AppendEn
 		reply.Success = false
 		return nil
 	}
-
+	
 	node.currentTerm = arguments.Term
+	node.leaderIP = "localhost:404" + strconv.Itoa(arguments.LeaderID)
 
 	if len(node.log) == 0 {
 		if arguments.PrevLogIndex == 0 {
