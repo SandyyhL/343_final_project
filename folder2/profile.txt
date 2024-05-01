@@ -1,0 +1,4 @@
+'acronym': 'JD', 'bio': 'Software Engineer', 'email': 'jd@example.com', 'id': '123'
+'acronym': 'JD', 'bio': 'Software Engineer', 'email': 'jd@example.com', 'id': '123'
+'acronym': 'SL', 'bio': 'Student', 'email': 'yl106@wellesley.com', 'id': '2365'
+'acronym': 'SL', 'bio': 'Student', 'email': 'yl106@wellesley.com', 'id': '2365'

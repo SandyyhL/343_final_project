@@ -70,12 +70,34 @@ func main() {
 	}
 
 	// Example usage: write data
-	writeEntry := ClientWriteEntry{
-		Filename: "profile",
-		ID: "123",
-		Data: "'acronym': 'JD', 'bio': 'Software Engineer', 'email': 'jd@example.com', 'id': '123'",
+	// writeEntry := ClientWriteEntry{
+	// 	Filename: "profile",
+	// 	ID: "123",
+	// 	Data: "'acronym': 'JD', 'bio': 'Software Engineer', 'email': 'jd@example.com', 'id': '123'",
+	// }
+	// err = client.ClientWrite(writeEntry)
+	// if err != nil {
+	// 	log.Fatal("Error writing data:", err)
+	// }
+
+	// time.Sleep(5 * time.Second)
+
+	// writeEntry_2 := ClientWriteEntry{
+	// 	Filename: "profile",
+	// 	ID: "123",
+	// 	Data: "'acronym': 'SL', 'bio': 'Student', 'email': 'yl106@wellesley.com', 'id': '2365'",
+	// }
+	// err = client.ClientWrite(writeEntry_2)
+	// if err != nil {
+	// 	log.Fatal("Error writing data:", err)
+	// }
+
+	writeEntry_message := ClientWriteEntry{
+		Filename: "message",
+		ID: "133590987",
+		Data: "'acronym': 'SL', 'timestamp': '2024/2/1', 'user': 'sandy', 'text': 'hihi'",
 	}
-	err = client.ClientWrite(writeEntry)
+	err = client.ClientWrite(writeEntry_message)
 	if err != nil {
 		log.Fatal("Error writing data:", err)
 	}
@@ -84,9 +106,9 @@ func main() {
 
 	// Example usage: read data
 	readEntry := ClientReadEntry{
-		Filename: "profile",
-		Column:	"id",
-		Value: "123",
+		Filename: "message",
+		Column:	"user",
+		Value: "sandy",
 	}
 	reply, err := client.ClientRead(readEntry)
 	if err != nil {
