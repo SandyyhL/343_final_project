@@ -103,9 +103,9 @@ func main() {
 
 	// read data
 	readEntry := ClientReadEntry{
-		Filename: "profile",
-		Column:	"id",
-		Value: "123",
+		Filename: "message",
+		Column:	"user",
+		Value: "sandy",
 	}
 	reply, err := client.ClientRead(readEntry)
 	if err != nil {
