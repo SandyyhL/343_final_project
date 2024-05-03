@@ -85,7 +85,7 @@ type ClientWriteReply struct {
 
 type ClientReadEntry struct {
 	Filename string
-	Column   string // either "ID" or "User"
+	Column   string // either "id" or "user"
 	Value    string
 }
 
@@ -96,9 +96,6 @@ type ClientReadReply struct {
 }
 
 const (
-	// ElectionTimeoutMin = 300
-	// ElectionTimeoutMax = 600
-	// HeartbeatInterval  = 200
 	ElectionTimeoutMin = 3000
 	ElectionTimeoutMax = 6000
 	HeartbeatInterval  = 2000
@@ -293,7 +290,7 @@ func (raftNode *RaftNode) appendEntriesToFollowers(newEntry bool, data ClientWri
 	raftNode.mu.Lock()
 	defer raftNode.mu.Unlock()
 
-	log.Println("Inside appendEntriesToFollowers")
+	// log.Println("Inside appendEntriesToFollowers")
 
 	totalServers := len(raftNode.serverNodes)
 	majority := totalServers/2 + 1
@@ -306,9 +303,9 @@ func (raftNode *RaftNode) appendEntriesToFollowers(newEntry bool, data ClientWri
 	for i, node := range raftNode.serverNodes {
 
 		index = raftNode.nextIndex[i]
-		log.Println("current index:", index)
+		// log.Println("current index:", index)
 		if index != 1 {
-			log.Println("INSIDE 305")
+			// log.Println("INSIDE 305")
 			prevLogIndex = raftNode.log[index-2].Index
 			prevLogTerm = raftNode.log[index-2].Term
 		} else {
@@ -343,7 +340,7 @@ func (raftNode *RaftNode) appendEntriesToFollowers(newEntry bool, data ClientWri
 					if repliesReceived >= majority {
 						raftNode.commitIndex++
 						raftNode.lastApplied++
-						log.Println("AppendEntriesToFollowers: Append to File")
+						log.Println("Leader writing to file..")
 						err := raftNode.appendToFile(data)
 						if err != nil {
 							print(err)
@@ -431,9 +428,8 @@ func (raftNode *RaftNode) ClientWrite(data ClientWriteEntry, reply *ClientWriteR
 	raftNode.mu.Lock()
 	defer raftNode.mu.Unlock()
 
-
+	reply.LeaderIP = ""
 	if raftNode.status != "leader" {
-		// If this node is not the leader, reject the client write request
 		if raftNode.leaderIP != "-1" {
 			reply.LeaderIP = raftNode.leaderIP
 		}
@@ -452,9 +448,6 @@ func (raftNode *RaftNode) ClientWrite(data ClientWriteEntry, reply *ClientWriteR
 
 	raftNode.log = append(raftNode.log, entry)
 
-	// if err != nil {
-	// 	log.Printf("Error: ", err)
-	// }
 	go raftNode.appendEntriesToFollowers(true, data)
 
 	reply.Success = true
@@ -465,6 +458,7 @@ func (raftNode *RaftNode) ClientRead(request ClientReadEntry, reply *ClientReadR
 	raftNode.mu.Lock()
 	defer raftNode.mu.Unlock()
 
+	reply.LeaderIP = ""
 	if raftNode.status != "leader" {
 		if raftNode.leaderIP != "-1" {
 			reply.LeaderIP = raftNode.leaderIP
@@ -473,10 +467,10 @@ func (raftNode *RaftNode) ClientRead(request ClientReadEntry, reply *ClientReadR
 		return nil
 	}
 
-	log.Println("CLIENT READ HAPPENING")
+	log.Println("CLIENT READ")
 
 	fileTypeFilename := request.Filename 
-	allEntries, err := raftNode.readFile(fileTypeFilename) // Assume returns ([]string, error)
+	allEntries, err := raftNode.readFile(fileTypeFilename) 
 	if err != nil {
 		reply.Success = false
 		return err
@@ -497,41 +491,22 @@ func (raftNode *RaftNode) ClientRead(request ClientReadEntry, reply *ClientReadR
 		}
 	}
 
-	// Set success based on whether any entries were found
 	reply.Success = len(reply.Data) > 0
 
 	return nil
 }
 
-//	creates a file of the following type: {
-//	    "456": {
-//	        "acronym": "",
-//	        "bio": "",
-//	        "email": "",
-//	        "id": ""
-//	    },
-//	    "123": {
-//	        "acronym": "",
-//	        "bio": "",
-//	        "email": "",
-//	        "id": ""
-//	    }
-//	}
-
 func (raftNode *RaftNode) appendToFile(entry ClientWriteEntry) error {
-    filename := raftNode.folder + entry.Filename + ".txt" // Change the extension to .txt to indicate plain text
+    filename := raftNode.folder + entry.Filename + ".txt" 
 
-    // Open or create the file for appending
     file, err := os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
     if err != nil {
         return err
     }
     defer file.Close()
 
-    // Prepare the data to be written, adding a newline to separate entries
-    dataToWrite := fmt.Sprintf("%s\n", entry.Data)
+    dataToWrite := fmt.Sprintf("%s: %s\n", entry.ID, entry.Data)
 
-    // Write the data to the file
     _, err = file.WriteString(dataToWrite)
     if err != nil {
         return err
@@ -540,46 +515,11 @@ func (raftNode *RaftNode) appendToFile(entry ClientWriteEntry) error {
     return nil
 }
 
-// func (raftNode *RaftNode) appendToJSONFile(entry ClientWriteEntry) error {
-
-// 	filename := raftNode.folder + entry.Filename  + ".json"
-
-// 	data := make(map[string]string)
-// 	err := json.Unmarshal([]byte(entry.Data), &data)
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	file, err := os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	defer file.Close()
-
-// 	// Create a new map
-// 	newData := map[string]map[string]string{
-// 		entry.ID: data,
-// 	}
-
-// 	fileData, err := json.MarshalIndent(newData, "", "    ")
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	// Append the new data to the file
-// 	_, err = file.Write(fileData)
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	return nil
-// }
-
 func (raftNode *RaftNode) readFile(filename string) ([]string, error) {
 	log.Println("INSIDE READFILE.")
 
     fullPath := raftNode.folder + filename + ".txt" 
-    // Open the file
+
     file, err := os.Open(fullPath)
     if err != nil {
         return nil, err
@@ -589,7 +529,7 @@ func (raftNode *RaftNode) readFile(filename string) ([]string, error) {
     var lines []string
     scanner := bufio.NewScanner(file)
 
-    // Read line by line
+
     for scanner.Scan() {
         lines = append(lines, scanner.Text())
     }
@@ -601,23 +541,6 @@ func (raftNode *RaftNode) readFile(filename string) ([]string, error) {
 	log.Println("lines: ", lines)
     return lines, nil
 }
-
-// func (raftNode *RaftNode) readFromJSONFile(fileN string) ([]string, error) {
-// 	filename := raftNode.folder + fileN + ".json"
-
-// 	existingData := make([]string, 0)
-// 	file, err := os.ReadFile(filename)
-// 	if err != nil {
-// 		return nil, err // Return the error if file reading fails
-// 	}
-
-// 	err = json.Unmarshal(file, &existingData)
-// 	if err != nil {
-// 		return nil, err // Return the error if JSON unmarshaling fails
-// 	}
-
-// 	return existingData, nil
-// }
 
 func (raftNode *RaftNode) initMatchIndex() {
 	raftNode.matchIndex = make([]int, len(raftNode.serverNodes))

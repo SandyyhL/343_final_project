@@ -23,7 +23,7 @@ type ClientWriteReply struct {
 
 type ClientReadEntry struct {
 	Filename string
-	Column   string // either "ID" or "User"
+	Column   string // either "id" or "user"
 	Value    string
 }
 
@@ -33,7 +33,6 @@ type ClientReadReply struct {
 	LeaderIP string
 }
 
-// Function to initialize the client by connecting to the leader's RPC server
 func NewClient(addr string) (*Client, error) {
 	client, err := rpc.DialHTTP("tcp", addr)
 	if err != nil {
@@ -42,38 +41,58 @@ func NewClient(addr string) (*Client, error) {
 	return &Client{client}, nil
 }
 
-// Function to write data to the leader using the ClientWrite RPC
 func (c *Client) ClientWrite(entry ClientWriteEntry) error {
-	var reply ClientWriteReply
-	err := c.client.Call("RaftNode.ClientWrite", entry, &reply)
-	if err != nil {
-		return err
-	}
-	return nil
+    var reply ClientWriteReply
+    err := c.client.Call("RaftNode.ClientWrite", entry, &reply)
+    if err != nil {
+        return err
+    }
+    // Retry if the request was sent to a follower instead of the leader
+    if reply.LeaderIP != "" {
+        c.client, err = rpc.DialHTTP("tcp", reply.LeaderIP)
+        if err != nil {
+            return err
+        }
+        err = c.ClientWrite(entry)
+        if err != nil {
+            return err
+        }
+    }
+    return nil
 }
 
-// Function to read data from the leader using the ClientRead RPC
 func (c *Client) ClientRead(entry ClientReadEntry) (ClientReadReply, error) {
-	var reply ClientReadReply
-	err := c.client.Call("RaftNode.ClientRead", entry, &reply)
-	if err != nil {
-		return ClientReadReply{}, err
-	}
-	return reply, nil
+    var reply ClientReadReply
+    err := c.client.Call("RaftNode.ClientRead", entry, &reply)
+    if err != nil {
+        return ClientReadReply{}, err
+    }
+    // Retry if the request was sent to a follower instead of the leader
+    if reply.LeaderIP != "" {
+        c.client, err = rpc.DialHTTP("tcp", reply.LeaderIP)
+        if err != nil {
+            return ClientReadReply{}, err
+        }
+        reply, err = c.ClientRead(entry)
+        if err != nil {
+            return ClientReadReply{}, err
+        }
+    }
+    return reply, nil
 }
 
 func main() {
-	// Initialize the client and connect to the leader's RPC server
+
 	client, err := NewClient("localhost:4041") 
 	if err != nil {
 		log.Fatal("Error connecting to the leader:", err)
 	}
 
-	// Example usage: write data
+	// write data
 	writeEntry := ClientWriteEntry{
 		Filename: "profile",
 		ID: "123",
-		Data: "'acronym': 'JD', 'bio': 'Software Engineer', 'email': 'jd@example.com', 'id': '123'",
+		Data: "'acronym': 'JC', 'bio': 'Wellesley Student', 'email': 'jc@wellesley.edu', 'id': '123'",
 	}
 	err = client.ClientWrite(writeEntry)
 	if err != nil {
@@ -82,7 +101,7 @@ func main() {
 
 	time.Sleep(5 * time.Second)
 
-	// Example usage: read data
+	// read data
 	readEntry := ClientReadEntry{
 		Filename: "profile",
 		Column:	"id",
