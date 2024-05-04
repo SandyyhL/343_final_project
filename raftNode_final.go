@@ -351,7 +351,7 @@ func (raftNode *RaftNode) appendEntriesToFollowers(newEntry bool, data ClientWri
                     raftNode.matchIndex[index]++
                 } else {
                     raftNode.nextIndex[index]--
-                    raftNode.resendLogEntryToFollowers(index)
+                    go raftNode.resendLogEntryToFollowers(index)
                 }
             }
             if reply.Term > raftNode.currentTerm {
@@ -539,7 +539,7 @@ func (raftNode *RaftNode) readFile(filename string) ([]string, error) {
         return nil, err
     }
 
-    log.Println("lines: ", lines)
+    // log.Println("lines: ", lines)
     return lines, nil
 }
 
