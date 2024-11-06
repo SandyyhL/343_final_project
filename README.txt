@@ -1,3 +1,5 @@
+Goal of this project: build a simple data storage system
+
 How to run code:
 
 1. Open 6 terminals (5 for cluster, 1 for client (cd client))
